@@ -17,76 +17,16 @@
         integrity="sha384-8Vi8VHwn3vjQ9eUHUxex3JSN/NFqUg3QbPyX8kWyb93+8AC/pPWTzj+nHtbC5bxD"
         crossorigin="anonymous"></script>
     <title>IIMap</title>
-    <style>
-    img {
-        position: relative;
-        z-index: 100;
-    }
-
-    .overlay {
-        content: "";
-        display: block;
-        position: absolute;
-        bottom:0;
-        top:0;
-        left:0;
-        right:0;
-        z-index: 1;
-        height: auto;
-        width: auto;
-        margin: 5% 5% 5% 5%;
-        transition: all 0.8s;
-        opacity: var(--bing);
-        background-color: attr(afr);
-    }
-
-    .button-box {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-direction: row;
-        flex: 1;
-        flex-shrink: 0;
-        flex-grow: 1;
-    }
-
-    .button-box button {
-        margin-left: 3px;
-        margin-right: 3px;
-    }
-
-    h3 {
-        margin-bottom: 0;
-    }
-
-    .big-input {
-        height: 2rem;
-        width: 97%;
-        margin-right: 12px;
-    }
-
-    .block {
-        display: block;
-        width: 100%;
-    }
-
-    .flex {
-        display: flex;
-        width: 100%;
-        justify-content: center;
-        align-items: center;
-    }
-
-    div[class*="board-"] {
-        touch-action: none;
-    }
-
-    .color-heading {
-        margin-bottom: 0;
-    }
-    
-    </style>
+    <link rel="stylesheet" href="style.css">
+    <script src="scripts/uiState.js"></script>
+    <script src="scripts/helpers.js"></script>
+    <script src="scripts/tensorHelpers.js"></script>
+    <script src="app.js"></script>
+    <script>
+        tf.loadLayersModel("model/model.json").then(model => {
+            window.app = new App(model);
+        });
+    </script>
 </head>
 <body>
     <div id="main" class="container">
@@ -105,9 +45,9 @@
             <div class="col-xxl-4 col-xl-4 col-lg-6 col-md-8 col-sm-8 col-12">
                 <div class="toolbox">
                     <div class="button-box">
-                        <button class="btn btn-secondary" id="start-board-btn">Reset board</button>
-                        <button class="btn btn-secondary" id="clear-board-btn">Clear board</button>
-                        <button class="btn btn-secondary" id="flip-board-btn">Flip board</button>
+                        <button class="btn btn-secondary" onclick="window.app.resetBoard()" id="start-board-btn">Reset board</button>
+                        <button class="btn btn-secondary" onclick="window.app.clearBoard()" id="clear-board-btn">Clear board</button>
+                        <button class="btn btn-secondary" onclick="window.app.flipBoard()" id="flip-board-btn">Flip board</button>
                     </div>
                 </div>
             </div>
@@ -120,31 +60,36 @@
             <div class="col-xxl-4 col-xl-4 col-lg-6 col-md-8 col-sm-8 col-12">
                 <div class="row mt-1">
                     <div class="col">
-                        <input class="big-input" type="text" placeholder="FEN" id="fen-input" name="fen-input" checked />
+                        <input class="big-input" type="text" onblur="window.app.clearFENInput()" oninput="window.app.processFENInput()"
+                            placeholder="FEN" id="fen-input" name="fen-input" checked />
                     </div>
                 </div>
                 <div class="row">
                     <div class="col">
                         <p class="color-heading"><b>White</b></p>
                         <label>
-                            <input type="checkbox" id="kingside-castling-rights-white" name="kingside-castling-rights-white" checked />
+                            <input type="checkbox" onchange="window.app.updateCastlingRights()" id="kingside-castling-rights-white"
+                                name="kingside-castling-rights-white" checked />
                             Kingside castling
                         </label>
                         <br>
                         <label>
-                            <input type="checkbox" id="queenside-castling-rights-white" name="queenside-castling-rights-white" checked />
+                            <input type="checkbox" onchange="window.app.updateCastlingRights()" id="queenside-castling-rights-white"
+                                name="queenside-castling-rights-white" checked />
                             Queenside castling
                         </label>
                     </div>
                     <div class="col">
                         <p class="color-heading"><b>Black</b></p>
                         <label>
-                            <input type="checkbox" id="kingside-castling-rights-black" name="kingside-castling-rights-black" checked />
+                            <input type="checkbox" onchange="window.app.updateCastlingRights()" id="kingside-castling-rights-black"
+                                name="kingside-castling-rights-black" checked />
                             Kingside castling
                         </label>
                         <br>
                         <label>
-                            <input type="checkbox" id="queenside-castling-rights-black" name="queenside-castling-rights-black" checked />
+                            <input type="checkbox" onchange="window.app.updateCastlingRights()" id="queenside-castling-rights-black"
+                                name="queenside-castling-rights-black" checked />
                             Queenside castling
                         </label>
                     </div>
@@ -158,7 +103,8 @@
                         </div>
                         <div class="row">
                             <div class="col">
-                                <input class="big-input" type="number" id="halfmoves-counter" name="halfmoves-counter" value="0" />
+                                <input oninput="window.app.predict()" class="big-input" type="number" id="halfmoves-counter" name="halfmoves-counter"
+                                    value="0" />
                             </div>
                         </div>
                     </div>
@@ -168,258 +114,5 @@
             </div>
         </div>
     </div>
-    <script>
-        const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
-        const ranks = ["1", "2", "3", "4", "5", "6", "7", "8"];
-        var castlingRights = [1, 1, 1, 1];
-        var playerToMove = 0;
-        var halfMoves = 0;
-        function updateColors(prediction) {
-            for(let i = 0; i < 8; i++) {
-                for(let j = 0; j < 8; j++) {
-                    let square = files[i] + ranks[j];
-                    let color = prediction[j][i] > 0.5 ? "#58C4DD" : "#FC6255";
-                    let opacity = Math.abs(0.5 - prediction[j][i]) * 2;
-                    let element = $("#square-" + square + "-overlay");
-                    element.css("background-color", color);
-                    element.css("opacity", opacity);
-                }
-            }
-        }
-
-        function plane(fillValue) {
-            let sample = [];
-            for(let i = 0; i < 8; i++) {
-                sample.push([]);
-                for(let j = 0; j < 8; j++) {
-                    sample[i].push(fillValue);
-                }
-            }
-            return sample;
-        }
-
-        function emptySample() {
-            let sample = [];
-            for(let p = 0; p < 20; p++) {
-                sample.push(plane(0));
-            }
-            return sample;
-            // return tf.tensor([sample], [1, 20, 8, 8]);
-        }
-
-        function addOverlays() {
-            for(let i = 0; i < 8; i++) {
-                for(let j = 0; j < 8; j++) {
-                    let square = files[i] + ranks[j];
-                    let element = $(".square-" + square);
-                    element.append("<div id='square-" + square + "-overlay' class='overlay'></div>");
-                }
-            }
-        }
-
-        function boardToSample(board) {
-            getAdditionalInformation();
-            let sample = emptySample(0);
-            
-
-            let pieceToPlaneIndex = {
-                "P": 0,
-                "N": 1,
-                "B": 2,
-                "R": 3,
-                "Q": 4,
-                "K": 5
-            };
-
-            // sample[12] = queenside castling for black
-            // sample[13] = kingside castling for black
-            // sample[14] = queenside castling for white
-            // sample[15] = kingside castling for white
-            // sample[16] = player to move has black pieces
-            // sample[17] = halfmoves since last capture
-            // sample[18] = zeroes
-            // sample[19] = ones
-
-            // The player to move's castling rights should be first
-            if (playerToMove) {
-                sample[12] = plane(castlingRights[0] ? 1 : 0);
-                sample[13] = plane(castlingRights[1] ? 1 : 0);
-                sample[14] = plane(castlingRights[2] ? 1 : 0);
-                sample[15] = plane(castlingRights[3] ? 1 : 0);
-            } else {
-                sample[12] = plane(castlingRights[2] ? 1 : 0);
-                sample[13] = plane(castlingRights[3] ? 1 : 0);
-                sample[14] = plane(castlingRights[0] ? 1 : 0);
-                sample[15] = plane(castlingRights[1] ? 1 : 0);
-            }
-            sample[16] = plane(playerToMove);
-            sample[17] = plane(halfMoves);
-            sample[18] = plane(0);
-            sample[19] = plane(1);
-
-            for(let i = 0; i < 8; i++) {
-                for(let j = 0; j < 8; j++) {
-                    let square = files[i] + ranks[j];
-                    if (board.hasOwnProperty(square)) {
-                        let pieceIsBlack = board[square][0] == "b";
-                        let offset = (pieceIsBlack === !playerToMove) ? 6 : 0;
-                        let planeIndex = offset + pieceToPlaneIndex[board[square][1]];
-                        if (playerToMove) {
-                            sample[planeIndex][7 - j][i] = 1;
-                        } else {
-                            sample[planeIndex][j][i] = 1;
-                        }
-                    }
-                }
-            }
-            return sample;
-        }
-
-        
-
-        function getAdditionalInformation() {
-            castlingRights = [
-                $("#queenside-castling-rights-black").is(":checked"),
-                $("#kingside-castling-rights-black").is(":checked"),
-                $("#queenside-castling-rights-white").is(":checked"),
-                $("#kingside-castling-rights-white").is(":checked")
-            ];
-
-            halfMoves = parseInt($("#halfmoves-counter").val());
-        }
-
-        function setAdditionalInformation() {
-            $("#queenside-castling-rights-black").prop("checked", castlingRights[0]);
-            $("#kingside-castling-rights-black").prop("checked", castlingRights[1]);
-            $("#queenside-castling-rights-white").prop("checked", castlingRights[2]);
-            $("#kingside-castling-rights-white").prop("checked", castlingRights[3]);
-            $("#halfmoves-counter").val(halfMoves);
-        }
-
-        
-
-        tf.loadLayersModel("model/model.json").then(model => {
-            var config1 = {
-                draggable: true,
-                position: "start",
-                dropOffBoard: "trash",
-                sparePieces: true,
-                onChange: onChangePredict
-            };
-
-            var board = Chessboard("board1", config1);
-
-            function readFEN(fen) {
-                let splits = fen.split(" ")
-                let newPlayerToMove = splits[1] == "w" ? 0 : 1;
-                if(newPlayerToMove != playerToMove) {
-                    board.flip();
-                    playerToMove = newPlayerToMove;
-                }
-                let allRights = splits[2];
-
-                castlingRights = [
-                    (allRights.indexOf("q") !== -1) ? 1 : 0, 
-                    (allRights.indexOf("k") !== -1) ? 1 : 0, 
-                    (allRights.indexOf("Q") !== -1) ? 1 : 0, 
-                    (allRights.indexOf("K") !== -1) ? 1 : 0, 
-                ];
-
-                halfMoves = parseInt(splits[4]);
-
-                setAdditionalInformation();
-                board.position(splits[0]);
-            }
-
-            function getMaxFromChannel(prediction, i, j) {
-                let vals = [];
-                for (let p = 0; p < 12; p++) {
-                    vals.push(prediction[p][i][j]);
-                }
-                return Math.max.apply(Math, vals);
-            }
-
-            function predictedMaskToVisual(board, prediction) {
-                // The model now predicts a tensor with the shape (12, 8, 8), i.e. a 12d vector for each
-                // square. Each element in this vector corresponds to a given type of piece (piece-type + color).
-                // The mask is created as follows:
-                // For the squares that have no piece, the overlay shows the value corresponding to the largest element in the 12d-vector
-                // for the given square. I.e. the highest value for any type of piece for the given square.
-                // For the squares that have a piece, the overlay shows the value of the piece that is there. I.e. the importance
-                // of the piece that is on the square already.
-                let overlay = [];
-                for (let i = 0; i < 8; i++) {
-                    overlay.push([]);
-                    for (let j = 0; j < 8; j++) {
-                        let valueToPush = -1;
-                        for (let p = 0; p < 12; p++) {
-                            if (board[p][i][j]) {
-                                // Has a piece at (i, j), should use its predicted importance as overlay value
-                                valueToPush = prediction[p][i][j];
-                            }
-                        }
-                        // There was no piece at (i, j), use the max importance of any piece at (i, j) as overlay value
-                        if (valueToPush == -1) {
-                            valueToPush = getMaxFromChannel(prediction, i, j);
-                        }
-                        overlay[i].push(valueToPush);
-                    }
-                }
-                return overlay;
-            }
-
-            function predict(pos) {
-                let sample = boardToSample(pos);
-                let prediction = model.predict(tf.tensor([sample], [1, 20, 8, 8]));
-                prediction = tf.reshape(prediction, [12, 8, 8]).arraySync();
-                updateColors(predictedMaskToVisual(sample, prediction));
-            }
-
-
-            function onChangePredict(oldPos, newPos) {
-                let prediction = predict(newPos);
-            }
-
-            $("#fen-input").on("input", () => {
-                readFEN($("#fen-input").val())
-                predict(board.position());
-            });
-
-            $("#halfmoves-counter").on("input", () => {
-                predict(board.position());
-            });
-            
-
-            $("#fen-input").on("blur", () => {
-                $("#fen-input").val("");
-            });
-
-            $("#start-board-btn").on("click", () => {
-                board.start();
-                predict(board.position());
-            });
-
-            $("#clear-board-btn").on("click", () => {
-                board.clear();
-                predict(board.position());
-            });
-
-            $("#flip-board-btn").on("click", () => {
-                board.flip();
-                playerToMove = playerToMove == 1 ? 0 : 1;
-                addOverlays();
-                predict(board.position());
-            });
-
-            $(window).resize(() => {
-                board.resize();
-                addOverlays();
-            });
-            
-            addOverlays();
-            predict(board.position());
-        });
-            
-    </script>
 </body>
 </html>
